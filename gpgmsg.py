@@ -182,6 +182,112 @@ def normalize_filename( filename, must_exist=True ):
 		else:
 			return filename
 
+# Function to take user input as a response to a message and combine it with the message being responded to.
+#
+# Parameters:
+#		message		- Message that the response is being written to
+# Return value:
+#		User input + the original message with '> ' added to the beginning of each line.
+def reply( orig_msg ):
+	if orig_msg == "":
+		print "[!] ERROR: reply: Parameter 'orig-msg' is required"
+		sys.exit(-1)
+
+	print "[+] Replying (End with . on a newline):"
+	new_msg = ""
+
+	while True:
+		data = raw_input("> ")
+		if data == ".":
+			break
+		else:
+			new_msg += data + "\n"
+
+	new_msg += "\n\n"
+	# Add the > to the each line of orig_msg and add it to the new message
+	for line in orig_msg.strip().split("\n"):
+		new_msg += "> " + line + "\n"
+
+	return new_msg
+
+# Function to decrypt a file and return the message
+#
+# Parameters:
+#		file		- File to decrypt. Prompt if blank (Default = "")
+#		passphrase	- Passphrase to use to decrypt. Prompt if blank (Default = "")
+# Return value:
+#		Decrypted text or error.
+def dec_and_read_file( filename="", passphrase="" ):
+	if filename == "":
+		filename = raw_input("[>] File to decrypt: ")
+
+		if filename == "":
+			print "[!] ERROR: dec_and_read_file: Filename cannot be blank"
+			sys.exit(-1)
+
+	filename = normalize_filename(filename)
+
+	print "[+] Reading encrypted file: " + filename
+	enc_data = open(filename, "r").read()
+
+	# Prompt for the passphrase if it was not provided
+	if passphrase == "":
+		passphrase = getpass.getpass("[>] Decryption passphrase: ")
+
+		if passphrase == "":
+			print "[!] ERROR: dec_and_read_file: Decryption passphrase cannot be blank"
+			sys.exit(-1)
+
+	data = gpg_decrypt(enc_data,passphrase)
+
+	return data
+
+# Function to encrypt a message and write it to a file.
+#
+# Parameters:
+#		message		- Message that is being encrypted and written to file
+#		default_file	- File to write to if none is input
+# Return value:
+#		None
+def enc_and_write_to_file( message, default_file="" ):
+	if message == "":
+		print "[!] ERROR: enc_and_write_to_file: Parameter 'message' is required"
+		sys.exit(-1)
+
+	# Build the prompt based on if there is a default file specified
+	prompt = "[>] Write to file"
+	if default_file == "":
+		prompt += ": "
+	else:
+		prompt += " (" + default_file + "): "
+
+	# Get the file to write to.
+	filename = raw_input(prompt)
+
+	if filename == "" and not default_file == "":
+		filename = default_file
+	
+	# Make sure the filename is absolute
+	filename = normalize_filename(filename, must_exist=False)
+
+	# Get the email address to encrypt for
+	email = raw_input("[>] Email to encrypt for: ")
+
+	if email == "":
+		print "[!] ERROR: enc_and_write_to_file: Email cannot be blank"
+
+	print "[+] Encrypting message for " + email
+	# Encrypt the message
+	enc_msg = gpg_encrypt(message,email)
+
+	if re.match("^\[!\] ERROR:", enc_msg):
+		print enc_msg
+		sys.exit(-1)
+
+	print "[+] Writing message to " + filename
+	# Write to the file
+	w_file = open(filename, "w").write(enc_msg)
+
 #
 # Main Program Loop
 #
@@ -220,37 +326,10 @@ while 1:
 		print "[+] Import successful"
 
 	elif options == "2":
-		print "[+] Decrypting message"
-		msg_file = raw_input("[>] Message Filename: ")
-
-		if msg_file == "":
-			print "[!] ERROR: Invalid input"
-			break
-
-		msg_file = normalize_filename(msg_file)
-		if msg_file == None:
-			print "[!] ERROR: File does not exist"
-			break
-
-		print "[+] Found: " + msg_file
-
-		# If the script has made it to here, the file name should be usable to open the file
-
-		# Request the passphrase to decrypt with
-		dec_pass = getpass.getpass("[>] GPG Decryption Passphrase: ")
-		enc_file_text = open(msg_file, 'r').read()
-		if len(enc_file_text) == 0:
-			print "[!] ERROR: File " + msg_file + " exists but is empty"
-			break
-
-		dec_msg = gpg_decrypt(enc_file_text, dec_pass)
-		print "dec_msg type: " + str(type(dec_msg))
-		if re.match("^[!] ERROR:", dec_msg):
-			print dec_msg
-			break
-		else:
-			dec_msg = dec_msg.strip()
-			print dec_msg
+		dec_file = raw_input("[>] File to decrypt: ")
+		dec_msg = dec_and_read_file(filename=dec_file)
+		print "[+] Decrypted message:"
+		print dec_msg
 
 		# Ask if the user would like to respond
 		respond = raw_input("[>] Respond? (Y/n): ").lower()
@@ -264,59 +343,10 @@ while 1:
 			print "[!] ERROR: Invalid input"
 			break
 
-		# Loop through the decrypted message and add > to the front of each line.
-		tmp_msg = ""
+		reply_body = reply(dec_msg)
 
-		for line in dec_msg.split('\n'):
-			tmp_msg += "> " + line + "\n"
-
-		dec_msg = tmp_msg
-
-		# If we got here it's because we are responding
-		pub_key_emails = gpg_pub_key_emails()
+		enc_and_write_to_file(reply_body, default_file=dec_file)
 		
-		if not pub_key_emails:
-			print "[!] ERROR: No public keys imported. Please import public keys to respond"
-			break
-
-		# Take user input until the enter a line with only a period on it
-		input_data = []
-
-		while True:
-			new_data = raw_input("> ");
-			if new_data == ".":
-				break
-			else:
-				input_data.append(new_data)
-
-		output = ""
-		for line in input_data:
-			output += line + "\n"
-
-		reply_body = output + "\n\n" + dec_msg
-
-		# If we get here we have at least one public key imported
-		response_email = raw_input("[>] Encrypt for? (email): ")
-
-		# Specify the file to write out to.
-		reply_file = raw_input("[>] File to store reply? (" + msg_file + "): ")
-
-		if reply_file == "":
-			reply_file = msg_file
-		else:
-			reply_file = normalize_filename(reply_file, must_exist=False)
-
-		print "[+] Encrypting reply in: " + msg_file
-		enc_reply = gpg_encrypt(reply_body,response_email)
-
-		if re.match("^[!] ERROR:", enc_reply):
-                        print enc_reply
-                        break
-
-		print "[+] Writing reply to file"
-		output = open(reply_file, "w").write(enc_reply)
-		print "[+] Reply successfully encrypted and written to " + reply_file
-
 	elif options == "3":
 		print "[+] Quitting..."
 		sys.exit(0)
