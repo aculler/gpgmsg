@@ -14,14 +14,13 @@ _gpg = None
 _gnupg_home_dir = ""
 
 
-# Function to set up the script for the first time or load the configs.
-#
-# Parameters:
-#        None
-#
-# Return value:
-#        None
 def setup_config():
+    """Sets up the configuration for the script.
+
+    If this script is being run for the first time it sets up the
+    configuration to defaults. If it has been run before it loads
+    the configs from the config file.
+    """
     conf_file = os.path.expanduser("~/.gpgmsg/gpgmsg.conf")
     gnupg_conf_dir = os.path.expanduser("~/.gpgmsg/gnupg/")
 
@@ -57,13 +56,8 @@ def setup_config():
                     os.mkdir(_gnupg_home_dir)
 
 
-# Function to set up the global gnupg object.
-#
-# Parameters:
-#        None
-# Return value:
-#        None
 def gpg_conf():
+    """Creates the global gnupg object used by other functions."""
     global _gpg
     if not _gnupg_home_dir:
         print "[!] ERROR: gpg_conf: no _gnupg_home_dir specified"
@@ -72,15 +66,13 @@ def gpg_conf():
     _gpg = gnupg.GPG(gnupghome=_gnupg_home_dir)
 
 
-# Function to decrypt a message.
-#
-# Parameters:
-#        crypt_text    - Text that needs to be decrypted
-#        passphrase    - GPG passphrase that is needed to decrypt the text
-#
-# Return value:
-#        Decrypted message or an error code.
 def gpg_decrypt(crypt_text, pphrase):
+    """Return decrypted plaintext.
+
+    Required Arguments:
+    crypt_text - gpg encrypted data to decrypt
+    pphrase - the private key passphrase to be used when decrcypting
+    """
     # Kill the script if data is omitted
     if crypt_text == "" or pphrase == "":
         print "[!] ERROR: gpg_decrypt: missing crypt_text or passphrase"
@@ -97,14 +89,14 @@ def gpg_decrypt(crypt_text, pphrase):
     return dec_obj.data
 
 
-# Function to encrypt a message
-#
-# Parameters:
-#        message_text    - Text that needs to be encrypted
-#        email        - Email associated with the public key to encrypt with
-# Return value:
-#        Encrypted message or an error code.
 def gpg_encrypt(message_text, email):
+    """Return encrypted message text.
+
+    Required Arguments:
+    message_text - text to encrypt
+    email - email address associated with the public key that should be used
+            to encrypt the message
+    """
     # Kill the script if data is omitted
     if message_text == "" or email == "":
         print "[!] ERROR: gpg_encrypt: missing message_text or email"
@@ -121,14 +113,12 @@ def gpg_encrypt(message_text, email):
     return str(enc_obj)
 
 
-# Function to import a GPG key file
-#
-# Parameters:
-#        file_contents    - Data to import
-#
-# Return value:
-#        Boolean regarding success
 def gpg_import_key(file_contents):
+    """Import a gpg key for later use.
+
+    Required Arguments:
+    file_contents - text from the key file to import
+    """
     # Kill the script if data is omitted
     if file_contents == "":
         print "[!] ERROR: gpg_import_key: missing file_name"
@@ -146,27 +136,21 @@ def gpg_import_key(file_contents):
         return True
 
 
-# Function to return an array of email adresses for all of the public
-# keys we have in the store.
-#
-# Parameters:
-#        None
-# Return value:
-#        Array of email addresses associated with public keys in the store
 def gpg_pub_key_emails():
+    """Return a list of emails associated with public keys in the store."""
     return _gpg.list_keys()
 
 
-# Function to normalize filenames to abs paths and check that the file exists
-#
-# Parameters:
-#        filename      - File name to verify/expand the absolute path and
-#                        verify it exists
-#        must_exist    - Switch to determine if the file must exist.
-#                        Default: True
-# Return value:
-#        Absolute path to filename
 def normalize_filename(filename, must_exist=True):
+    """Return normalized absolute path to file.
+
+    Required Arguments:
+    filename - name of the file to verify and/or expand to the absolute path
+
+    Optional Arguments:
+    must_exist - boolean flag to determine if the file must exist already in
+                 order for the function to return successfully
+    """
     if filename == "":
         print "[!] ERROR: normalize_filename: Invalid filename"
         sys.exit(-1)
@@ -195,15 +179,23 @@ def normalize_filename(filename, must_exist=True):
             return filename
 
 
-# Function to take user input as a response to a message and combine it with
-# the message being responded to.
-#
-# Parameters:
-#        message        - Message that the response is being written to
-# Return value:
-#        User input + the original message with '> ' added to the beginning
-#        of each line.
 def reply(orig_msg):
+    """Return hierarchical message history.
+
+    Required Arguments:
+    orig_msg - message that the user input is replying to
+
+    The user will be prompted for input until they send a period only on a
+    line. The message they're replying to has '> ' added to the
+    beginning of each line and the new message prepended to it all, making
+    a hierarchical conversation.
+
+    Ex:
+
+    Hey. I'm responding to your message.
+
+    > Hey. This is my message. Please respond to me!
+    """
     if orig_msg == "":
         print "[!] ERROR: reply: Parameter 'orig-msg' is required"
         sys.exit(-1)
@@ -226,15 +218,14 @@ def reply(orig_msg):
     return new_msg
 
 
-# Function to decrypt a file and return the message
-#
-# Parameters:
-#        file          - File to decrypt. Prompt if blank (Default = "")
-#        passphrase    - Passphrase to use to decrypt. Prompt if
-#                        blank (Default = "")
-# Return value:
-#        Decrypted text or error.
 def dec_and_read_file(filename="", passphrase=""):
+    """Return decrypted text.
+
+    Optional Arguments:
+    file - name of the file to decrypt. user will be prompted if left blank
+    passphrase - private key passphrase used to decrypt. user will be prompted
+                 if left blank
+    """
     if filename == "":
         filename = raw_input("[>] File to decrypt: ")
 
@@ -261,14 +252,15 @@ def dec_and_read_file(filename="", passphrase=""):
     return data
 
 
-# Function to encrypt a message and write it to a file.
-#
-# Parameters:
-#        message        - Message that is being encrypted and written to file
-#        default_file    - File to write to if none is input
-# Return value:
-#        None
 def enc_and_write_to_file(message, default_file=""):
+    """Encrypt a message and save it to a file.
+
+    Required Arguments:
+    message - message to encrypt
+
+    Optional Arguments:
+    default_file - file to write to if the user doesn't input one
+    """
     if message == "":
         print "[!] ERROR: enc_and_write_to_file: Parameter 'message'" +\
               " is required"
